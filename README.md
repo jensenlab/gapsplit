@@ -33,7 +33,7 @@ Samples   Coverage   MinGap   Median   MaxGap     Elapsed     Remaining   Infeas
 
 ### Using `gapsplit`
 
-`gapsplit` is a single function called `gapsplit`. For information on usage, see `help gapsplit`.
+`gapsplit` is a single function called `gapsplit`. For more information, see `help gapsplit`.
 
 ## Python
 
