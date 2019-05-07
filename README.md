@@ -1,6 +1,6 @@
 # gapsplit
 
-Efficient sampling for COBRA models. `gapsplit` samples both convex (LP) and non-convex (MILP) models by targeting unexplored regions of the solution space.
+Efficient random sampling for constraint-based (COBRA) models. `gapsplit` samples both convex (LP) and non-convex (MILP) models by targeting unexplored regions of the solution space.
 
 `gapsplit` is available for Matlab and Python.
 
