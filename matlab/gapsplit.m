@@ -19,7 +19,7 @@ function [sampling] = gapsplit(model,n,varargin)
 %                    the largest relative gap ('max').
 %   'secondaryFrac'  Fraction of model variables randomly chosen as
 %                    secondary targets during each iteration. Default is
-%                    0.1 (10% of reaction). If 0, no secondary targeting
+%                    0.05 (5% of reactions). If 0, no secondary targeting
 %                    is used; this may decrease coverage but improves
 %                    runtime for numerically difficult models.
 %   'vars'           Indices of variables to target during sampling. By
@@ -71,7 +71,7 @@ global CBT_QP_SOLVER;
 param = inputParser;
 param.addParameter('minval',[],@isnumeric);
 param.addParameter('maxval',[],@isnumeric);
-param.addParameter('secondaryFrac',0.1,@(x) 0.0 <= x && x <= 1.0);
+param.addParameter('secondaryFrac',0.05,@(x) 0.0 <= x && x <= 1.0);
 param.addParameter('reportInterval',0.1);
 param.addParameter('vars',[]);
 param.addParameter('minRange',1e-5);
