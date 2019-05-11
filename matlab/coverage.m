@@ -1,4 +1,8 @@
-function [cover,steps] = coverage(X,stepsize,mins,maxs)
+function [cover,steps] = coverage(X,stepsize,mins,maxs,tol)
+
+if nargin < 5
+    tol = 1e-5;
+end
 
 n = size(X,1);
 
@@ -9,6 +13,9 @@ if nargin > 2
     X = [maxs(:)'; X];
 end
 bndpts = nargin - 2; % number of added points
+
+vars = max(X,[],1) - min(X,[],1) >= tol;
+X = X(:,vars);
 
 steps = 1:stepsize:n;
 cover = zeros(size(steps));
