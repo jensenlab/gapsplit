@@ -1,3 +1,4 @@
 old/
 LOCAL__*
+*.m~
 .DS_Store
