@@ -232,7 +232,7 @@ while tries < maxTries && i < n
     sampling.maxGap(i) = max(r(vars));
     sampling.elapsed(i) = tcurrent;
     
-    if mod(i,reportInterval) == 0
+    if mod(i,reportInterval) == 0 || reportInterval == 1
         % report
         fprintf(fmt, i, n, sampling.coverage(i)*100, sampling.minGap(i), ...
             sampling.medianGap(i), sampling.maxGap(i), ...
