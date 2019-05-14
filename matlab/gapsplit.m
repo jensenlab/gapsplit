@@ -42,6 +42,10 @@ function [sampling] = gapsplit(model,n,varargin)
 %   'minval',        minval and maxval are vectors holding the feasible
 %      'maxval'      range for each variable. If these are not provided,
 %                    GAPSPLIT will use FLUXVARIABILITY to find the bounds.
+%   'enforceRange'   If true (default), round solutions to fall within the
+%                    feasible range. This prevents small deviations outside
+%                    the feasible range from causing small decreases in
+%                    coverage.
 %   'reportInterval' Show the coverage and gap statistics at this interval.
 %                    If a number between 0.0 and 1.0 is given, GAPSPLIT
 %                    reports when that fraction of N samples is finished
@@ -71,6 +75,7 @@ global CBT_QP_SOLVER;
 param = inputParser;
 param.addParameter('minval',[],@isnumeric);
 param.addParameter('maxval',[],@isnumeric);
+param.addParameter('enforceRange',true,@islogical);
 param.addParameter('secondaryFrac',0.05,@(x) 0.0 <= x && x <= 1.0);
 param.addParameter('reportInterval',0.1);
 param.addParameter('vars',[]);
@@ -98,6 +103,7 @@ end
 
 minval = param.Results.minval(:);
 maxval = param.Results.maxval(:);
+enforceRange = param.Results.enforceRange;
 if isempty(minval) || isempty(maxval)
     if reportInterval > 0
         fprintf('Calculating feasible ranges for variables.');
@@ -211,7 +217,12 @@ while tries < maxTries && i < n
         continue
     end
     i = i + 1;
-    sampling.samples(i,:) = sol.full(1:p);
+    raw = sol.full(1:p);
+    if enforceRange
+        raw = min(raw, maxval);
+        raw = max(raw, minval);
+    end
+    sampling.samples(i,:) = raw;
     
     tcurrent = toc(tstart);
     [~,l,u,r] = maxgap([minval'; maxval'; sampling.samples(1:i,:)]);
