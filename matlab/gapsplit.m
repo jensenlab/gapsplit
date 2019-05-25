@@ -54,6 +54,12 @@ function [sampling] = gapsplit(model,n,varargin)
 %                    to 0. Default is 0.1.
 %   'debug'          Turn on debugging information. Default is false.
 %   'solverParams'   Cell array of parameters passed to solver.
+%   'tiger'          If true, the input model is a TIGER model. The model
+%                    will be converted to a COBRA MILP structure. Default
+%                    is false.
+%   'targetDiscrete' If true (default=false), use the discrete (binary
+%                    or integer) variables as primary and secondary 
+%                    targets.
 %
 % OUTPUTS
 %   A sampling structure with the following fields:
@@ -84,6 +90,8 @@ param.addParameter('primaryTol',1e-3);
 param.addParameter('debug',false);
 param.addParameter('maxTries',Inf);
 param.addParameter('solverParams',{});
+param.addParameter('tiger',false,@islogical);
+param.addParameter('targetDiscrete',false,@islogical);
 
 errMsg = "Primary selector must be 'seq', 'max', or 'random'.";
 isValidPrimary = @(x) assert(ismember(x,{'seq','max','random'}),errMsg);
@@ -101,6 +109,12 @@ if reportInterval < 1.0
     reportInterval = floor(reportInterval * n);
 end
 
+if param.Results.tiger
+    model = tiger_to_cobra_milp(model);
+end
+
+isMILP = isfield(model,'vartype');
+
 minval = param.Results.minval(:);
 maxval = param.Results.maxval(:);
 enforceRange = param.Results.enforceRange;
@@ -109,7 +123,11 @@ if isempty(minval) || isempty(maxval)
         fprintf('Calculating feasible ranges for variables.');
     end
     tstart = tic;
-    [minval,maxval] = fluxVariability(model,0);
+    if isMILP
+        [minval,maxval] = fva_milp(model);
+    else
+        [minval,maxval] = fluxVariability(model,0);
+    end
     if reportInterval > 0
         fprintf(' (%.2f seconds)\n', toc(tstart));
     end
@@ -117,12 +135,19 @@ elseif reportInterval > 0
     fprintf('Using supplied feasible ranges for variables.\n');
 end
 
-model = buildLPproblemFromModel(model);
+if ~isMILP
+    model = buildLPproblemFromModel(model);
+end
 [m,p] = size(model.A);
 
 vars = param.Results.vars;
 if isempty(vars)
     vars = 1:p;
+end
+if isMILP && ~param.Results.targetDiscrete
+    % do not target binary and integer variables
+    discrete = find(model.vartype == 'B' | model.vartype == 'I');
+    vars = setdiff(vars,discrete);
 end
 fvaRange = maxval - minval;
 vars = vars(fvaRange(vars) >= param.Results.minRange);
@@ -141,6 +166,9 @@ model.c = zeros(p+ksec,1);
 model.lb(kcidx) = -Inf;
 model.ub(kcidx) = Inf;
 model.csense(kridx) = 'E';
+if isMILP
+    model.vartype(kcidx) = 'C';
+end
 
 model.F = sparse(p+ksec,p+ksec);
 model.F(kcidx,kcidx) = 1;
@@ -159,6 +187,12 @@ if reportInterval > 0
     fprintf('Targeting 1 primary and %i secondary variables.\n',ksec);
     fprintf('Sampling LP model with %i/%i unblocked variables (%6.2f%%).\n',Nvars,p,Nvars/p*100);
     fprintf(hdr);
+end
+
+if isMILP
+    solver = @solveCobraMIQP;
+else
+    solver = @solveCobraQP;
 end
 
 tstart = tic;
@@ -201,9 +235,9 @@ while tries < maxTries && i < n
         if strcmpi(CBT_QP_SOLVER,'gurobi')
             % barrier or automatic methods lead to residual problems in 
             % Gurobi. Use primal/dual simplex instead.
-            sol = solveCobraQP(model,'Method',1,param.Results.solverParams{:});
+            sol = solver(model,'Method',1,param.Results.solverParams{:});
         else
-            sol = solveCobraQP(model,param.Results.solverParams{:});
+            sol = solver(model,param.Results.solverParams{:});
         end
         debug(sprintf('   Solution was %s (%i) in %f seconds with objective %f.\n', ...
             sol.origStat, sol.stat, sol.time, sol.obj));
@@ -213,7 +247,9 @@ while tries < maxTries && i < n
     
     model = prevModel;
     tries = tries + 1;
-    if sol.stat ~= 1
+    if (~isMILP && sol.stat ~= 1) || (isMILP && sol.origStat ~= 1)
+        % the solveCobraMIQP returns the numeric status in origStat, 
+        % not stat like solveCobraQP
         continue
     end
     i = i + 1;

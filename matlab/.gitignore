@@ -1,2 +1,4 @@
 *.mat
 ACHRerror.txt
+*.log
+
