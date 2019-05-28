@@ -35,7 +35,33 @@ Samples   Coverage   MinGap   Median   MaxGap     Elapsed     Remaining   Infeas
 
 `gapsplit` is a single function called `gapsplit`. For more information, see `help gapsplit`.
 
+### Sampling MILP models
+
+`gapsplit` can sample non-convex models. The `gapsplit` function recognizes MILP models by the `vartype` field and uses the COBRA Toolbox MIQP solver.
+
+To sample [TIGER](https://github.com/pauljensen/tiger), pass the model to `gapsplit` with the `'tiger'` option set to `true`. The TIGER model will be converted to a COBRA MILP model. TIGER needs to be installed for this conversion.
+
 ## Python
+
+The `gapsplit.py` module is compatible with [cobrapy](https://opencobra.github.io/cobrapy). To test your installation, run the module as a script.
+```sh
+$ python3 gapsplit.py
+Calculating feasible ranges using FVA.
+Targeting 87/95 unblocked primary variables.
+Targeting 4 secondary variables.
+
+ Sample   Coverage   MinGap   Median   MaxGap     Elapsed     Remaining   Infeasible
+ 10/100     38.47%   0.2500   0.6096   0.9434        0.33          2.96            0
+ 20/100     59.19%   0.1292   0.3997   0.6743        0.62          2.50            0
+ 30/100     67.75%   0.1219   0.3227   0.5010        0.92          2.14            0
+ 40/100     72.82%   0.1112   0.2635   0.4019        1.20          1.80            0
+ 50/100     77.77%   0.1022   0.2369   0.3352        1.50          1.50            0
+ 60/100     80.07%   0.0625   0.1948   0.2906        1.80          1.20            0
+ 70/100     80.79%   0.0625   0.1874   0.2505        2.09          0.90            0
+ 80/100     83.56%   0.0550   0.1677   0.2420        2.39          0.60            0
+ 90/100     84.79%   0.0540   0.1574   0.2094        2.68          0.30            0
+100/100     85.59%   0.0540   0.1498   0.1948        2.96          0.00            0
+```
 
 ## Citation
 
