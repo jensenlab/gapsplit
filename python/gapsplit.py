@@ -115,7 +115,7 @@ def gapsplit(
         max_tries = sys.maxsize
     start_time = time.time()
     for try_ in range(max_tries):
-        relative, target, width = maxgap(samples[0:k,idxs], fva.iloc[idxs,:])
+        relative, target, width = _maxgap(samples[0:k,idxs], fva.iloc[idxs,:])
         if primary == 'max':
             primary_var = np.argmax(relative)
         elif primary == 'random':
