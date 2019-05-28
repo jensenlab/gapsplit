@@ -2,3 +2,5 @@ old/
 LOCAL__*
 *.m~
 .DS_Store
+__pycache__
+gurobi.log
