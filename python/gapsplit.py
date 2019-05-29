@@ -7,15 +7,17 @@ import pandas as pd
 import cobra
 import cobra.test
 
+
 def gapsplit(
         model, n, max_tries=None,
-        primary='max', primary_tol=0.001,
+        primary='sequential', primary_tol=0.001,
         secondary_frac=0.05,
         fva=None,
         min_range=1e-5,
         enforce_range=True,
         report_interval=0.1,
-        quiet=False):
+        quiet=False,
+        gurobi_direct=False):
     """Randomly sample a COBRA model.
 
     Parameters
@@ -30,10 +32,10 @@ def gapsplit(
         difficult models. `max_tries` limits the total number of attempts. If
         None (default), gapsplit will continue until `n` feasible samples are
         found.
-    primary: str, optional, default='max'
+    primary: str, optional, default='sequential'
         Strategy for selection the primary target. Targets are chosen
-        sequentially ('seq'), randomly ('random'), or by always targeting the
-        variable with the largest relative gap ('max', default).
+        sequentially ('sequential', default), randomly ('random'), or by always
+        targeting the variable with the largest relative gap ('max').
     primary_tol: float, optional, default=0.001
         The primary target is split by setting the upper and lower bounds to
         the midway point of the max gap. The bounds are set to within +/-
@@ -63,6 +65,10 @@ def gapsplit(
         are printed every 100 samples.) To turn off reporting, set to 0.
     quiet: boolean, optional, default=True
         Set to false to keep gapslit from printing status updates.
+    gurobi_direct: boolean, optional, default=False
+        Use the gurobipy interface directly to sample the model. This can
+        significantly reduce sampling times and gives identical results.
+        Requires the gurobipy model and model.solver be set to 'gurobi'.
 
     Returns
     -------
@@ -104,6 +110,9 @@ def gapsplit(
     if report_interval < 1.0:
         report_interval = np.floor(report_interval * n).astype(int)
 
+    if gurobi_direct:
+        grb_model = _reduce_gurobi(model)
+
     samples = np.zeros((n, len(model.reactions)))
     k = 0
     infeasible_count = 0
@@ -133,9 +142,14 @@ def gapsplit(
         secondary_targets = target[secondary_vars]
         secondary_weights = weights[idxs[secondary_vars]]
 
-        new_sample = _generate_sample(
-            model, idxs[primary_var], primary_lb, primary_ub,
-            idxs[secondary_vars], secondary_targets, secondary_weights)
+        if gurobi_direct:
+            new_sample = _generate_sample_gurobi_direct(
+                grb_model, idxs[primary_var], primary_lb, primary_ub,
+                idxs[secondary_vars], secondary_targets, secondary_weights)
+        else:
+            new_sample = _generate_sample(
+                model, idxs[primary_var], primary_lb, primary_ub,
+                idxs[secondary_vars], secondary_targets, secondary_weights)
         if new_sample is not None:
             if enforce_range:
                 new_sample[new_sample > fva.maximum] = fva.maximum[new_sample > fva.maximum]
@@ -192,6 +206,67 @@ def _generate_sample(
             return solution.fluxes
 
 
+def _generate_sample_gurobi_direct(
+        model, primary_var, primary_lb, primary_ub,
+        secondary_vars=None, secondary_targets=None, secondary_weights=None):
+    """Solve the model directly with the gurobipy interface.
+
+    Cobrapy models have several features that makes them slow to sample. We can
+    apply some Gurobi-specific optimizations to improve gapsplit runtimes.
+        - "Unsplit" all the variables from forward and reverse to a single
+          reaction that has positive and negative fluxes.
+        - Set the objectives directly to skip the sympy interface.
+        - Collection solutions for all variables simultaneously.
+
+    The first optimization is handled by _reduce_gurobi. The latter tricks
+    are used in this function.
+
+    Inputs
+    ------
+    model: grb model object
+        A copy of the Gurobi model object from cobra_mode._solver.problem.
+        This model should be reduced using _reduce_gurobi.
+    <all other inputs from _generate_sample>
+
+    Returns
+    -------
+    Either a NumPy array with the new solution or None (if infeasible).
+    """
+
+    import gurobipy as grb
+    # model is a copy of the grb model (from cobra_model._solver.problem)
+    vars = model.getVars()
+    primary = vars[primary_var]
+    prev_lb = primary.getAttr("lb")
+    prev_ub = primary.getAttr("ub")
+    primary.setAttr("lb", primary_lb)
+    primary.setAttr("ub", primary_ub)
+
+    if secondary_vars is not None:
+        qobj = grb.QuadExpr(0)
+        sec_vars = [vars[i] for i in secondary_vars]
+        qobj.addTerms(secondary_weights, sec_vars, sec_vars)
+        qobj.addTerms(-2*secondary_weights*secondary_targets, sec_vars)
+        model.setObjective(qobj, sense=grb.GRB.MINIMIZE)
+    else:
+        model.setObjective(grb.LinExpr(0))
+
+    model.optimize()
+    #if model.status == 3:
+    #    print(model.status, primary_var, prev_lb, prev_ub, primary_lb, primary_ub)
+    if model.status == 2:
+        solution = np.array(model.getAttr("X", vars))
+    else:
+        solution = None
+
+    # reset the bounds on the primary target
+    primary.setAttr("lb", prev_lb)
+    primary.setAttr("ub", prev_ub)
+    model.update()
+
+    return solution
+
+
 def _maxgap(points, fva=None):
     # points has rows = samples, columns = variables
 
@@ -230,6 +305,30 @@ def _make_report_header(maxN):
     return hdr, fmt
 
 
+def _reduce_gurobi(cobra):
+    """Modify the gurobi model object to improve sampling efficiency."""
+    grb = cobra._solver.problem.copy()
+    varnames = [var.VarName for var in grb.getVars()]
+    for rxn in cobra.reactions:
+        if rxn.reverse_id in varnames:
+            for_var = grb.getVarByName(rxn.id)
+            rev_var = grb.getVarByName(rxn.reverse_id)
+            ub = for_var.getAttr("ub") - rev_var.getAttr("lb")
+            lb = for_var.getAttr("lb") - rev_var.getAttr("ub")
+            for_var.setAttr("ub", ub)
+            for_var.setAttr("lb", lb)
+            grb.remove(rev_var)
+
+    # For some reason FVA leaves a variable 'fva_old_objective' in the grb
+    # model object. We need to remove it so the number of variables match the
+    # number of reactions.
+    if 'fva_old_objective' in varnames:
+        grb.remove(grb.getVarByName('fva_old_objective'))
+
+    grb.update()
+    return grb
+
+
 if __name__ == '__main__':
     model = cobra.test.create_test_model('textbook')
-    print(gapsplit(model,100,primary="max"))
+    gapsplit(model,100,primary="sequential")
