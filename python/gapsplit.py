@@ -119,11 +119,12 @@ def gapsplit(
     if primary == 'sequential':
         # primary_var will increment
         primary_var = -1
-    if max_tries is None:
-        # no limit on number of tries; pick a really big number
-        max_tries = sys.maxsize
+    try_ = 0
     start_time = time.time()
-    for try_ in range(max_tries):
+    while True:
+        if max_tries is not None and try_ >= max_tries:
+            break
+        try_ += 1
         relative, target, width = _maxgap(samples[0:k,idxs], fva.iloc[idxs,:])
         if primary == 'max':
             primary_var = np.argmax(relative)
