@@ -60,6 +60,9 @@ function [sampling] = gapsplit(model,n,varargin)
 %   'targetDiscrete' If true (default=false), use the discrete (binary
 %                    or integer) variables as primary and secondary 
 %                    targets.
+%   'diffMethod'     Express secondary variable differences using
+%                    'constraints' (default) or directly in the
+%                    'objective'.
 %
 % OUTPUTS
 %   A sampling structure with the following fields:
@@ -96,6 +99,10 @@ param.addParameter('targetDiscrete',false,@islogical);
 errMsg = "Primary selector must be 'seq', 'max', or 'random'.";
 isValidPrimary = @(x) assert(ismember(x,{'seq','max','random'}),errMsg);
 param.addParameter('primary','seq',isValidPrimary);
+
+errMsg = "diffMethod must be 'constraints' or 'objective.";
+isValidDiffMethod = @(x) assert(ismember(x,{'constraints','objective'}),errMsg);
+param.addParameter('diffMethod','constraints',isValidDiffMethod);
 
 param.parse(varargin{:});
 
@@ -155,23 +162,30 @@ Nvars = length(vars);
 
 quadWeights = 1 ./ fvaRange.^2;
 
-% add constraints for secondary target
 ksec = floor(param.Results.secondaryFrac * Nvars);
 useSec = ksec >= 1;
-kcidx = [false(p,1); true(ksec,1)];
-kridx = [false(m,1); true(ksec,1)];
-model.A(kridx,kcidx) = -eye(ksec);
-model.b(kridx) = 0;
-model.c = zeros(p+ksec,1);
-model.lb(kcidx) = -Inf;
-model.ub(kcidx) = Inf;
-model.csense(kridx) = 'E';
-if isMILP
-    model.vartype(kcidx) = 'C';
-end
 
-model.F = sparse(p+ksec,p+ksec);
-model.F(kcidx,kcidx) = 1;
+useDiffObj = strcmpi(param.Results.diffMethod,'objective');
+if useDiffObj
+    model.F = sparse(p,p);
+    model.c = zeros(p,1);
+    model.osense = 1;
+else
+    % add constraints for secondary target
+    kcidx = [false(p,1); true(ksec,1)];
+    kridx = [false(m,1); true(ksec,1)];
+    model.A(kridx,kcidx) = -eye(ksec);
+    model.b(kridx) = 0;
+    model.c = zeros(p+ksec,1);
+    model.lb(kcidx) = -Inf;
+    model.ub(kcidx) = Inf;
+    model.csense(kridx) = 'E';
+    if isMILP
+        model.vartype(kcidx) = 'C';
+    end
+    model.F = sparse(p+ksec,p+ksec);
+    model.F(kcidx,kcidx) = 1;
+end
 
 sampling.samples = zeros(n,p);
 sampling.coverage = zeros(n,1);
@@ -226,9 +240,15 @@ while tries < maxTries && i < n
     
     if useSec
         secondary = vars(randi(Nvars,ksec,1));
-        model.A(kridx,secondary) = eye(ksec);
-        model.b(kridx) = mean([l(secondary); u(secondary)]);
-        model.F(kcidx,kcidx) = diag(quadWeights(secondary));
+        debug(['Secondary variables: ' num2str(secondary) '\n']);
+        if useDiffObj
+            model.F(secondary,secondary) = 2*diag(quadWeights(secondary));
+            model.c(secondary) = -2 .* quadWeights(secondary)' .* mean([l(secondary); u(secondary)]);
+        else
+            model.A(kridx,secondary) = eye(ksec);
+            model.b(kridx) = mean([l(secondary); u(secondary)]);
+            model.F(kcidx,kcidx) = diag(quadWeights(secondary));
+        end
     end
     
     try
@@ -241,8 +261,9 @@ while tries < maxTries && i < n
         end
         debug(sprintf('   Solution was %s (%i) in %f seconds with objective %f.\n', ...
             sol.origStat, sol.stat, sol.time, sol.obj));
-    catch
+    catch ME
         sol = struct('stat',-1);
+        rethrow(ME)
     end
     
     model = prevModel;
