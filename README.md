@@ -63,6 +63,8 @@ Targeting 4 secondary variables.
 100/100     85.59%   0.0540   0.1498   0.1948        2.96          0.00            0
 ```
 
+`gapsplit` can use the Gurobi interface directly to significantly reduce sampling times. Use the `gurobi_direct=True` parameter to enable this feature.
+
 ## Citation
 
 Keaty TC, Jensen PA. **gapsplit: Efficient random sampling for non-convex constraint-based models.** *bioRxiv*.
