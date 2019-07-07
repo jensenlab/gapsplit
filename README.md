@@ -65,6 +65,10 @@ Targeting 4 secondary variables.
 
 `gapsplit` can use the Gurobi interface directly to significantly reduce sampling times. Use the `gurobi_direct=True` parameter to enable this feature.
 
+### Using `gapsplit` without the COBRA Toolbox
+
+A self-contained version of `gapsplit` can sample an LP or MPS file directly. The package can be installed with `pip install gapsplit`.
+
 ## Citation
 
 Keaty TC, Jensen PA. **gapsplit: Efficient random sampling for non-convex constraint-based models.** *bioRxiv*.
