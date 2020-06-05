@@ -25,7 +25,7 @@ if ismember(suite,{'lp','all'})
 
     cobra.b = zeros(m,1);
 
-    cobra.rxns = array2names('r%i',1:n);
+    cobra.rxns = arrayfun(@(x) sprintf('r%i',x),1:n,'Uniform',false);
     cobra.mets = {'A','C','F','B','D','E','G'}';
 
     cobra.genes = {'g4','g5a','g5b', ...
