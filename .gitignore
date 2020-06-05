@@ -1,4 +1,5 @@
 old/
+matlab/nonlinear
 LOCAL__*
 *.m~
 .DS_Store
