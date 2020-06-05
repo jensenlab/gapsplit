@@ -225,10 +225,18 @@ while tries < maxTries && i < n
         primary, model.lb(primary), model.ub(primary), minval(primary), maxval(primary)));
     
     if useSec
-        secondary = vars(randi(Nvars,ksec,1));
+        secondary_idxs = vars(randi(Nvars-1,ksec,1));
+        secondary_candidates = setdiff(1:Nvars,primary);
+        secondary = secondary_candidates(secondary_idxs);
         model.A(kridx,secondary) = eye(ksec);
         model.b(kridx) = mean([l(secondary); u(secondary)]);
         model.F(kcidx,kcidx) = diag(quadWeights(secondary));
+        if param.Results.debug
+            for sec = secondary
+                debug(sprintf('   Secondary var %i targeted to %f.\n', ...
+                    sec, mean([l(sec); u(sec)])));
+            end
+        end
     end
     
     try
