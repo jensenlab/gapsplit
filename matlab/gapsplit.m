@@ -225,16 +225,21 @@ while tries < maxTries && i < n
         primary, model.lb(primary), model.ub(primary), minval(primary), maxval(primary)));
     
     if useSec
-        secondary = setdiff(randperm(Nvars,ksec),primary);
-        if ~isempty(secondary)
-            model.A(kridx,secondary) = eye(ksec);
-            model.b(kridx) = mean([l(secondary); u(secondary)]);
-            model.F(kcidx,kcidx) = diag(quadWeights(secondary));
-            if param.Results.debug
-                for sec = secondary
-                    debug(sprintf('   Secondary var %i targeted to %f.\n', ...
-                        sec, mean([l(sec); u(sec)])));
-                end
+        % reset the secondary targeting constraints and objective
+        model.A(kridx,:) = 0;
+        model.b(kridx) = 0;
+        model.F(kcidx,kcidx) = 0;
+        
+        % pick and set new secondary targets
+        secondary = randperm(Nvars,ksec);
+        model.A(kridx,secondary) = eye(ksec);
+        model.b(kridx) = mean([l(secondary); u(secondary)]);
+        model.F(kcidx,kcidx) = diag(quadWeights(secondary));
+        
+        if param.Results.debug
+            for sec = secondary
+                debug(sprintf('   Secondary var %i targeted to %f.\n', ...
+                    sec, mean([l(sec); u(sec)])));
             end
         end
     end
