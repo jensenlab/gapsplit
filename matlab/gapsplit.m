@@ -153,7 +153,8 @@ fvaRange = maxval - minval;
 vars = vars(fvaRange(vars) >= param.Results.minRange);
 Nvars = length(vars);
 
-quadWeights = 1 ./ fvaRange.^2;
+quadWeights = zeros(size(fvaRange));
+quadWeights(vars) = 1 ./ fvaRange(vars).^2;
 
 % add constraints for secondary target
 ksec = floor(param.Results.secondaryFrac * Nvars);
